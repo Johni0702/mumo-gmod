@@ -1,0 +1,11 @@
+"AddonInfo"
+{
+	"name"			"Mumble"
+	"version"		"0.0.1"
+	"up_date"		"01/01/2018"
+	"author_name"		"johni0702"
+	"author_email"		"me@johni0702.de"
+	"author_url"		"https://github.com/johni0702/mumo-gmod"
+	"info"			""
+	"override"		"0"
+}
