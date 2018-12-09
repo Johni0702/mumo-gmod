@@ -8,6 +8,8 @@ This module does not affect users outside of its three controlled channels (one 
 Users in the lobby channel are automatically moved to the dead/alive channels if they are ingame and back if they disconnect from the game.
 Users in either the dead or the alive channel are automatically moved depending on their state in the game. *If a user dies in the game, they will be moved to the dead channel but will appear to remain in the alive channel for all remaining players.*
 
+Additionally, if the current game is TTT, any traitors are assigned a group named "traitor" in the lobby channel which can by used to set up a high-quality traitor voice chat via whisper hotkeys.
+
 ### Installation
 #### Mumble
 For the module to work properly you have to create at least three channels.

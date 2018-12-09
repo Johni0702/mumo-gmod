@@ -59,7 +59,10 @@ local function UpdateStateNow()
 	state = {}
 	local inGame = GetRoundState ~= nil and GetRoundState() == ROUND_ACTIVE
 	for _, ply in pairs(player.GetAll()) do
-		state[ply:UniqueID()] = inGame and not ply:Alive()
+		state[ply:UniqueID()] = {
+			traitor = ply.GetTraitor and ply:GetTraitor(),
+			dead = inGame and not ply:Alive()
+		}
 	end
 	http.Post(string.format("%s/state", API_URL), {state = util.TableToJSON(state)})
 	Msg(util.TableToJSON(state))

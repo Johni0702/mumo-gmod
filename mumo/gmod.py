@@ -27,6 +27,7 @@ from bottle import Bottle, run as runBottle, request, abort
 import json
 
 DEAD_GROUP = 'dead'
+TRAITOR_GROUP = 'traitor'
 
 class Game:
     def __init__(self, message_queue, server, lobbyChannelId, aliveChannelId, deadChannelId):
@@ -57,27 +58,32 @@ class Game:
             with open(path, 'rb') as f:
                 (self._gmodToMumble, self._mumbleToGmod, self._pendingUsers) = pickle.load(f)
 
-    def moveGmodUser(self, userId, to):
-        self.moveMumbleUser(self._gmodToMumble[userId], to)
+    def updateGModUser(self, userId, channel, traitor):
+        self.updateMumbleUser(self._gmodToMumble[userId], channel, traitor)
 
-    def moveMumbleUser(self, userId, to):
+    def updateMumbleUser(self, userId, channel, traitor):
         channelId = {
             'lobby': self._lobbyChannelId,
             'alive': self._aliveChannelId,
             'dead': self._deadChannelId
-        }[to]
+        }[channel]
         users = [u for u in self._server.getUsers().values() if u.userid == userId]
         if len(users) != 1: return # User offline
         user = users[0]
-        print('Moving %s to %s' % (user.name, to))
         session = user.session
-        if to in ['lobby', 'alive']:
+        if channel in ['lobby', 'alive']:
             self._server.removeUserFromGroup(self._lobbyChannelId, session, DEAD_GROUP)
         else:
             self._server.addUserToGroup(self._lobbyChannelId, session, DEAD_GROUP)
-        if user.channel in [self._lobbyChannelId, self._aliveChannelId, self._deadChannelId]:
+        if user.channel in [self._lobbyChannelId, self._aliveChannelId, self._deadChannelId] \
+           and user.channel != channelId:
+            print('Moving %s to %s' % (user.name, channel))
             user.channel = channelId
             self._server.setState(user)
+        if traitor:
+            self._server.addUserToGroup(self._lobbyChannelId, session, TRAITOR_GROUP)
+        else:
+            self._server.removeUserFromGroup(self._lobbyChannelId, session, TRAITOR_GROUP)
 
     @local_thread_blocking
     def getUserOrList(self, gmodUser):
@@ -104,23 +110,17 @@ class Game:
     @local_thread_blocking
     def _updateState(self, newState):
         # First find users that quit gmod
-        for user, alive in self._state.iteritems():
+        for user, _ in self._state.iteritems():
             if user not in newState:
                 if user in self._gmodToMumble:
-                    self.moveGmodUser(user, 'lobby')
-        for user, nowDead in newState.iteritems():
+                    self.updateGModUser(user, 'lobby', False)
+        # then users that joined or were already online
+        for user, state in newState.iteritems():
             if user not in self._gmodToMumble:
                 continue
-            # and users that joined gmod
-            if user not in self._state:
-                self.moveGmodUser(user, 'dead' if nowDead else 'alive')
-                continue
-            # Then find users whose state has changed
-            dead = self._state[user]
-            if nowDead and not dead:
-                self.moveGmodUser(user, 'dead')
-            elif not nowDead and dead:
-                self.moveGmodUser(user, 'alive')
+            dead = state['dead']
+            traitor = state['traitor']
+            self.updateGModUser(user, 'dead' if dead else 'alive', traitor)
         # Finally replace old state
         print(newState)
         self._state = newState
@@ -144,8 +144,10 @@ class Game:
         self._mumbleToGmod[mumbleUser] = gmodUser
         self._save()
         if gmodUser in self._state:
-            dead = self._state[gmodUser]
-            self.moveMumbleUser(mumbleUser, 'dead' if dead else 'alive')
+            state = self._state[gmodUser]
+            dead = state['dead']
+            traitor = state['traitor']
+            self.updateMumbleUser(mumbleUser, 'dead' if dead else 'alive', traitor)
         return dict(valid = True)
     
     def userStateChanged(self, server, state):
@@ -155,8 +157,10 @@ class Game:
         if mumbleUser not in self._mumbleToGmod: return # unknown user
         gmodUser = self._mumbleToGmod[mumbleUser]
         if gmodUser not in self._state: return # user not ingame
-        dead = self._state[gmodUser]
-        self.moveMumbleUser(mumbleUser, 'dead' if dead else 'alive')
+        state = self._state[gmodUser]
+        dead = state['dead']
+        traitor = state['traitor']
+        self.updateMumbleUser(mumbleUser, 'dead' if dead else 'alive', traitor)
 
 
 class gmod(MumoModule):
