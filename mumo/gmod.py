@@ -105,6 +105,8 @@ class Game:
     def updateState(self):
         newState = request.params['state']
         newState = json.loads(newState)
+        if not isinstance(newState, dict):
+            newState = dict()
         self._updateState(newState)
 
     @local_thread_blocking
