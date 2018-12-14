@@ -44,7 +44,8 @@ class Game:
 
     def setupBottle(self, bottle, secret):
         bottle.post('/%s/state' % secret)(self.updateState)
-        bottle.route('/%s/<gmodUser>' % secret)(self.getUserOrList)
+        bottle.route('/%s/users' % secret)(self.listUsers)
+        bottle.route('/%s/<gmodUser>/link' % secret)(self.linkUser)
         bottle.route('/%s/<gmodUser>/challenge/<mumbleUser:int>' % secret)(self.challengeUser)
         bottle.route('/%s/<gmodUser>/challenge/solve/<solution>' % secret)(self.completeChallenge)
 
@@ -86,12 +87,13 @@ class Game:
             self._server.removeUserFromGroup(self._lobbyChannelId, session, TRAITOR_GROUP)
 
     @local_thread_blocking
-    def getUserOrList(self, gmodUser):
+    def linkUser(self, gmodUser):
         if gmodUser in self._gmodToMumble:
             return dict(known = True)
-        else:
-            return self.listUsers()
 
+        return dict(known = False)
+
+    @local_thread_blocking
     def listUsers(self):
         users = dict()
         for user in self._server.getUsers().values():

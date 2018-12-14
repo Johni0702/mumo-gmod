@@ -20,18 +20,24 @@ local CONFIG_FILE = "mumble.config.txt"
 local API_URL = string.Split(file.Read(CONFIG_FILE), "\n")[1]
 
 local function OpenUserSelection(ply)
-	http.Fetch(string.format("%s/%s", API_URL, ply:UniqueID()), function(body)
-		local response = util.JSONToTable(body)
+	http.Fetch(string.format("%s/users", API_URL), function(body)
+		net.Start("mumble_show_user_selection")
+		net.WriteTable(util.JSONToTable(body))
+		net.Send(ply)
+	end)
+end
+concommand.Add("mumble_show_selection", OpenUserSelection)
+util.AddNetworkString("mumble_show_user_selection")
+
+local function LinkUser(ply)
+	http.Fetch(string.format("%s/%s/link", API_URL, ply:UniqueID()), function(body)
+	local response = util.JSONToTable(body)
 		if not response.known then
-			net.Start("mumble_show_user_selection")
-			net.WriteTable(response)
-			net.Send(ply)
+			OpenUserSelection(ply)
 		end
 	end)
 end
-hook.Add("PlayerInitialSpawn", "mumble_init_spawn", OpenUserSelection)
-concommand.Add("mumble_show_selection", OpenUserSelection)
-util.AddNetworkString("mumble_show_user_selection")
+hook.Add("PlayerInitialSpawn", "mumble_init_spawn", LinkUser)
 
 local function RequestMumbleUser(ply, command, args)
 	if not IsValid(ply) then return end
