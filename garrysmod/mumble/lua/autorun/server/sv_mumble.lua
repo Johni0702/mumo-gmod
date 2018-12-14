@@ -46,9 +46,7 @@ local function TryConfirmMumbleUser(ply, command, args)
 	local gmod = ply:UniqueID()
 	local solution = args[1]
 	http.Fetch(string.format("%s/%s/challenge/solve/%s", API_URL, gmod, solution), function(body)
-		if util.JSONToTable(body).valid then
-			UpdateState()
-		else
+		if not util.JSONToTable(body).valid then
 			OpenUserSelection(ply)
 		end
 	end)
