@@ -30,7 +30,7 @@ concommand.Add("mumble_show_selection", OpenUserSelection)
 util.AddNetworkString("mumble_show_user_selection")
 
 local function LinkUser(ply)
-	http.Fetch(string.format("%s/%s/link", API_URL, ply:UniqueID()), function(body)
+	http.Fetch(string.format("%s/%s/link", API_URL, ply:AccountID()), function(body)
 	local response = util.JSONToTable(body)
 		if not response.known then
 			OpenUserSelection(ply)
@@ -41,7 +41,7 @@ hook.Add("PlayerInitialSpawn", "mumble_init_spawn", LinkUser)
 
 local function RequestMumbleUser(ply, command, args)
 	if not IsValid(ply) then return end
-	local gmod = ply:UniqueID()
+	local gmod = ply:AccountID()
 	local mumble = math.floor(args[1]) -- Make sure this is an integer
 	http.Fetch(string.format("%s/%s/challenge/%d", API_URL, gmod, mumble))
 end
@@ -49,7 +49,7 @@ concommand.Add("mumble_user", RequestMumbleUser)
 
 local function TryConfirmMumbleUser(ply, command, args)
 	if not IsValid(ply) then return end
-	local gmod = ply:UniqueID()
+	local gmod = ply:AccountID()
 	local solution = args[1]
 	http.Fetch(string.format("%s/%s/challenge/solve/%s", API_URL, gmod, solution), function(body)
 		if not util.JSONToTable(body).valid then
@@ -63,7 +63,7 @@ local function UpdateStateNow()
 	state = {}
 	local inGame = GetRoundState ~= nil and GetRoundState() == ROUND_ACTIVE
 	for _, ply in pairs(player.GetAll()) do
-		state[ply:UniqueID()] = {
+		state[ply:AccountID()] = {
 			traitor = ply.GetTraitor and ply:GetTraitor(),
 			dead = inGame and not ply:Alive()
 		}
