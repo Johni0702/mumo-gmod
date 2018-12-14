@@ -142,6 +142,10 @@ class Game:
         if gmodUser not in self._pendingUsers: abort(400, 'User not yet challenged')
         (mumbleUser, challenge) = self._pendingUsers[gmodUser]
         if challenge != solution: return dict(valid = False)
+        if gmodUser in self._gmodToMumble:
+            del self._mumbleToGmod[self._gmodToMumble[gmodUser]]
+        if mumbleUser in self._mumbleToGmod:
+            del self._gmodToMumble[self._mumbleToGmod[mumbleUser]]
         self._gmodToMumble[gmodUser] = mumbleUser
         self._mumbleToGmod[mumbleUser] = gmodUser
         self._save()
