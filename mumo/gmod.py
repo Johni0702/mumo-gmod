@@ -51,13 +51,22 @@ class Game:
 
     def _save(self):
         with open('data/gmod/%d.%d' % (self._server.id(), self._lobbyChannelId), 'wb') as f:
-            pickle.dump((self._gmodToMumble, self._mumbleToGmod, self._pendingUsers), f, 0)
+            pickle.dump((
+                # Filter session-only mappings
+                { k: v for k, v in self._gmodToMumble.iteritems() if k > 0 and v > 0},
+                { k: v for k, v in self._mumbleToGmod.iteritems() if k > 0 and v > 0},
+                self._pendingUsers
+            ), f, 0)
 
     def _load(self):
         path = 'data/gmod/%d.%d' % (self._server.id(), self._lobbyChannelId)
         if os.path.isfile(path):
             with open(path, 'rb') as f:
                 (self._gmodToMumble, self._mumbleToGmod, self._pendingUsers) = pickle.load(f)
+        # Load session-only mappings
+        for user in self._server.getUsers().values():
+            if user.channel in [self._lobbyChannelId, self._aliveChannelId, self._deadChannelId]:
+                self._registerUserByIdentity(user)
 
     def updateGModUser(self, userId, channel, traitor):
         self.updateMumbleUser(self._gmodToMumble[userId], channel, traitor)
@@ -68,7 +77,7 @@ class Game:
             'alive': self._aliveChannelId,
             'dead': self._deadChannelId
         }[channel]
-        users = [u for u in self._server.getUsers().values() if u.userid == userId]
+        users = [u for u in self._server.getUsers().values() if u.userid == userId or u.session == -userId]
         if len(users) != 1: return # User offline
         user = users[0]
         session = user.session
@@ -90,6 +99,11 @@ class Game:
     def linkUser(self, gmodUser):
         if gmodUser in self._gmodToMumble:
             return dict(known = True)
+
+        for user in self._server.getUsers().values():
+            if user.channel != self._lobbyChannelId: continue
+            if gmodUser == self._registerUserByIdentity(user):
+                return dict(known = True)
 
         return dict(known = False)
 
@@ -144,8 +158,15 @@ class Game:
         if gmodUser not in self._pendingUsers: abort(400, 'User not yet challenged')
         (mumbleUser, challenge) = self._pendingUsers[gmodUser]
         if challenge != solution: return dict(valid = False)
+        self._registerUser(gmodUser, mumbleUser)
+        return dict(valid = True)
+
+    def _registerUser(self, gmodUser, mumbleUser):
         if gmodUser in self._gmodToMumble:
-            del self._mumbleToGmod[self._gmodToMumble[gmodUser]]
+            oldMumbleUser = self._gmodToMumble[gmodUser]
+            if oldMumbleUser == mumbleUser:
+                return # user already registered
+            del self._mumbleToGmod[oldMumbleUser]
         if mumbleUser in self._mumbleToGmod:
             del self._gmodToMumble[self._mumbleToGmod[mumbleUser]]
         self._gmodToMumble[gmodUser] = mumbleUser
@@ -156,12 +177,22 @@ class Game:
             dead = state['dead']
             traitor = state['traitor']
             self.updateMumbleUser(mumbleUser, 'dead' if dead else 'alive', traitor)
-        return dict(valid = True)
-    
+
+    def _registerUserByIdentity(self, mumbleState):
+        idParts = [part.split(':', 1) for part in mumbleState.identity.split(';')]
+        if any(len(part) != 2 for part in idParts): return None
+        idParts = {key: value for [key, value] in idParts}
+        if 'id' not in idParts: return None
+        gmodUser = idParts['id']
+        mumbleUser = mumbleState.userid if mumbleState.userid > 0 else -mumbleState.session
+        self._registerUser(gmodUser, mumbleUser)
+        return gmodUser
+
     def userStateChanged(self, server, state):
         if state.channel != self._lobbyChannelId: return # not in lobby channel
-        if not state.userid > 0: return # not a registered user
-        mumbleUser = state.userid
+        mumbleUser = state.userid if state.userid > 0 else -state.session
+        if not state.userid > 0:
+            self._registerUserByIdentity(state)
         if mumbleUser not in self._mumbleToGmod: return # unknown user
         gmodUser = self._mumbleToGmod[mumbleUser]
         if gmodUser not in self._state: return # user not ingame
